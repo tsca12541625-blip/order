@@ -1,0 +1,19 @@
+﻿STREAMING_CHUNK:Configuring gitignore rules...
+Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+IDE & Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Temporary Files & Logs
+*.log
+*.tmp
+node_modules/
