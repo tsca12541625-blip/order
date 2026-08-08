@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>團體點餐系統</title>
+<title>點餐系統</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -51,6 +51,18 @@
   .uploadPanel { padding: 18px 20px; margin-bottom: 18px; }
   .uploadPanel h2 { font-size: 15px; margin: 0 0 4px; font-weight: 700; }
   .uploadPanel .hint { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 12px; line-height: 1.6; }
+  
+  .api-setting { 
+    background: #FFFDF8; border: 1px dashed var(--line); padding: 10px 14px; border-radius: 10px; 
+    margin-bottom: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .api-setting label { font-size: 13px; font-weight: 700; }
+  .api-setting input {
+    padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13px; 
+    flex: 1; min-width: 200px; max-width: 300px; font-family: inherit;
+  }
+  .api-setting input:focus { outline: none; border-color: var(--pink); }
+
   .uploadRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .btn {
     border: none; border-radius: 999px; padding: 10px 18px; font-weight: 700; font-size: 13.5px;
@@ -214,7 +226,7 @@
 <header class="top">
   <div class="brandrow">
     <div>
-      <h1>團體線上點餐系統</h1>
+      <h1>線上點餐系統</h1>
       <p id="menuMeta">上傳菜單照片，自動辨識品項與價格，多人一起點餐、自動算總價</p>
     </div>
   </div>
@@ -222,8 +234,15 @@
 
 <main>
   <div class="panel uploadPanel">
-    <h2>📋 菜單辨識</h2>
-    <p class="hint">目前使用預設菜單（丹丹漢堡）。想換成自己的菜單，直接上傳一張清楚的菜單照片，系統會自動讀出品項名稱與價格。</p>
+    <h2>📋 菜單辨識 (使用 Google Gemini API)</h2>
+    <p class="hint">目前使用預設菜單（丹丹漢堡）。想換成自己的菜單，請先輸入您的 Gemini API Key，接著上傳一張清楚的菜單照片，系統會自動讀出品項名稱與價格。</p>
+    
+    <div class="api-setting">
+      <label for="geminiApiKey">🔑 API Key：</label>
+      <input type="password" id="geminiApiKey" placeholder="AIzaSyB...">
+      <span class="hint" style="margin:0; font-size:11px;">(金鑰僅儲存於本機瀏覽器中)</span>
+    </div>
+
     <div class="uploadRow">
       <button class="btn btn-primary" id="uploadBtn">上傳新菜單照片</button>
       <button class="btn btn-outline" id="resetMenuBtn">還原範例菜單</button>
@@ -919,6 +938,15 @@ async function clearAllOrders(){
 }
 
 async function extractMenuFromImage(file){
+  const apiKey = document.getElementById("geminiApiKey").value.trim();
+  if(!apiKey) {
+    showToast("請先輸入 Gemini API Key");
+    return;
+  }
+  
+  // 記住 API Key
+  try { await AppStorage.set("gemini_api_key", apiKey); } catch(e){}
+
   const statusEl = document.getElementById("uploadStatus");
   statusEl.className = "status";
   statusEl.textContent = "正在讀取圖片…";
@@ -931,36 +959,41 @@ async function extractMenuFromImage(file){
   });
   const mediaType = file.type || "image/jpeg";
 
-  statusEl.textContent = "正在辨識菜單內容…";
+  statusEl.textContent = "正在透過 Gemini 辨識菜單內容… (約需幾秒鐘)";
 
-  const systemPrompt = `你是菜單辨識引擎。只能輸出「純JSON」，不能有任何說明文字、不能用markdown code fence。
+  const systemPrompt = `你是菜單辨識引擎。只能輸出「純JSON」，不能有任何說明文字。
 JSON格式必須是：
 {"storeName":"店名","categories":[{"name":"分類名稱","note":"此分類的重要規則，例如是否附飲料、加購規則，20字以內，沒有就空字串","items":[{"name":"品項名稱","price":數字,"tag":"NEW或微辣等標籤，沒有就空字串"}]}]}
 規則：
 - 套餐若由多個品項組成，name請直接用「品項A+品項B」的格式呈現（用+號連接）。
 - price一律是數字。
-- 只輸出JSON本身。`;
+- 確保能完整輸出圖片中「所有」品項與價格。
+- 嚴格只輸出JSON格式，不需要前後的 markdown block。`;
 
-  try{
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: [{
-          role: "user",
-          content: [
-            { type:"image", source:{ type:"base64", media_type: mediaType, data: base64 } },
-            { type:"text", text:"請辨識這張菜單圖片，輸出符合格式的JSON。" }
+        contents: [{
+          parts: [
+            { text: systemPrompt },
+            { inlineData: { mimeType: mediaType, data: base64 } }
           ]
-        }]
+        }],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
       })
     });
+
+    if (!response.ok) {
+       const err = await response.json();
+       throw new Error(err.error?.message || "API request failed");
+    }
+
     const data = await response.json();
-    let text = (data.content||[]).map(b=>b.text||"").join("").trim();
-    text = text.replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
+    let text = data.candidates[0].content.parts[0].text.trim();
     const parsed = JSON.parse(text);
     if(!parsed.categories || !parsed.categories.length) throw new Error("empty");
 
@@ -968,17 +1001,17 @@ JSON格式必須是：
     activeCat = MENU.categories[0].key;
     openItemId = null;
     itemConfigState = {};
-    document.getElementById("menuMeta").textContent = `目前菜單來源：${MENU.storeName}（自動辨識）`;
+    document.getElementById("menuMeta").textContent = `目前菜單來源：${MENU.storeName}（Gemini 自動辨識）`;
     renderTabs(); renderItems();
 
     try{ await AppStorage.set("dandan_menu", JSON.stringify(parsed)); }catch(e){}
 
     statusEl.className = "status ok";
     statusEl.textContent = "辨識完成！請核對每個品項的價格是否正確。";
-  }catch(e){
+  } catch(e) {
     console.error(e);
     statusEl.className = "status err";
-    statusEl.textContent = "辨識失敗，請換一張更清楚的菜單照片再試一次。";
+    statusEl.textContent = "辨識失敗，請檢查 API Key 是否正確，或換一張更清楚的照片再試一次。";
   }
 }
 
@@ -999,9 +1032,13 @@ async function init(){
   renderCart();
   await loadOrders();
 
+  // 讀取之前儲存的名字和 API Key
   try{
     const savedName = await AppStorage.get("dandan_last_name");
     if(savedName && savedName.value) document.getElementById("nameInput").value = savedName.value;
+    
+    const savedKey = await AppStorage.get("gemini_api_key");
+    if(savedKey && savedKey.value) document.getElementById("geminiApiKey").value = savedKey.value;
   }catch(e){}
 
   document.getElementById("uploadBtn").onclick = ()=> document.getElementById("fileInput").click();
