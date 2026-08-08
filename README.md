@@ -12,23 +12,6 @@
 * 📷 **AI 菜單圖片辨識**：支援上傳新菜單照片，自動辨識生成新的點餐選項。  
 * 📱 **響應式 UI 設計**：完美適應手機與電腦螢幕。
 
-## **🚀 如何在 GitHub Pages 上發布（免費託管）**
-
-1. **建立 GitHub 儲存庫**：  
-   * 登入 GitHub 並點擊 **New Repository**。  
-   * 將儲存庫名稱設為 group-ordering-system（或您喜歡的名稱）。  
-   * 將專案設為 **Public**。  
-2. **上傳檔案**：  
-   * 將此專案的所有檔案（index.html、README.md、.gitignore、LICENSE）推送到 main 分支。  
-3. **開啟 GitHub Pages**：  
-   * 進入 GitHub 專案頁面，點擊 **Settings** 頁籤。  
-   * 在左側選單找到 **Pages**。  
-   * 在 **Build and deployment** \> **Branch** 中選擇 main 並保持 / (root) 資料夾。  
-   * 點擊 **Save**。  
-4. **取得您的點餐網站連結**：  
-   * 等待約 1\~2 分鐘後，GitHub 會為您生成專屬網址（格式如：https://\<your-username\>.github.io/\<repository-name\>/）。  
-   * 直接將該網址發送給同事或朋友即可開始點餐！
-
 ## **🛠 本地開發與執行**
 
 不需要安裝 Node.js 或建置工具，直接在電腦雙擊開啟 index.html 即可在瀏覽器中運行與測試。
