@@ -279,13 +279,17 @@
   <footer>此系統已連接雲端資料庫，任何菜單或訂單的更動將即時反映至所有使用者的畫面上。</footer>
 </main>
 
-  <script src="./config.js"></script>
+<script src="./config.js"></script>
 <script type="module">
-// 你的其他 JavaScript 邏輯
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+let firebaseConfig = JSON.parse(window.__firebase_config);
+
+const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'food-order-app';
+
+let db, auth, currentUser;
 
 if (typeof __firebase_config !== 'undefined') {
   firebaseConfig = JSON.parse(__firebase_config);
