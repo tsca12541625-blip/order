@@ -55,12 +55,18 @@
   .btn-primary:hover { filter: brightness(1.06); }
   .btn-outline { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
   .btn-outline:hover { border-color: var(--pink); color: var(--pink-dark); }
-  .btn-ghost { background: #F4EAE0; color: var(--ink-soft); padding: 6px 12px; font-size: 12px;}
   .btn:disabled { opacity: .5; cursor: not-allowed; }
   #fileInput { display: none; }
   .status { font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; min-height: 16px; }
   .status.err { color: #B0322C; }
   .status.ok { color: #2E7D4F; }
+
+  /* Store Selector & Image */
+  .store-header { margin-bottom: 20px; }
+  .store-header h2 { font-size: 13px; color: var(--ink-soft); margin: 0 0 8px; font-weight: 700; }
+  .store-select { width: 100%; max-width: 320px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--line); font-size: 15px; font-weight: 700; font-family: inherit; background: #fff; cursor: pointer; outline: none; }
+  .store-select:focus { border-color: var(--pink); }
+  .store-image { width: 100%; height: auto; max-height: 250px; object-fit: cover; border-radius: 14px; margin-top: 14px; border: 1px solid var(--line); display: none; box-shadow: var(--shadow); }
 
   .layout { display: flex; gap: 18px; align-items: flex-start; }
   .menuCol { flex: 1; min-width: 0; }
@@ -127,9 +133,11 @@
   .grandTotal { background: var(--ink); color: #fff; border-radius: 12px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
   .grandTotal .lbl { font-size: 12.5px; color: #D9C9BE; }
   .grandTotal .val { font-size: 24px; font-weight: 900; font-family: 'DM Mono', monospace; }
-  .personCard { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; }
+  .personCard { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; transition: border-color .2s; }
+  .personCard.my-card { border-color: var(--pink); background: #FFFDF8; }
   .personCard .p-head { display: flex; justify-content: space-between; align-items: baseline; }
-  .personCard .p-name { font-weight: 900; font-size: 14.5px; }
+  .personCard .p-name { font-weight: 900; font-size: 14.5px; display: flex; align-items: center; gap: 6px; }
+  .my-badge { font-size: 10px; background: var(--pink); color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700; }
   .personCard .p-time { font-size: 10.5px; color: var(--ink-soft); }
   .personCard .p-total { font-weight: 900; font-family: 'DM Mono', monospace; color: var(--pink-dark); }
   .personCard ul { margin: 8px 0 0; padding-left: 0; list-style: none; font-size: 12.5px; }
@@ -137,6 +145,11 @@
   .personCard li:first-child { border-top: none; }
   .li-top { display: flex; justify-content: space-between; }
   .li-sub { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  
+  /* My Order Actions */
+  .my-actions { display: flex; gap: 8px; margin-top: 10px; justify-content: flex-end; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .btn-small { padding: 6px 12px; font-size: 12px; }
+
   .noOrders { text-align: center; color: var(--ink-soft); font-size: 13px; padding: 30px 0; }
 
   .summaryBox { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
@@ -176,7 +189,7 @@
   <div class="brandrow">
     <div>
       <h1>線上點餐系統 ☁️</h1>
-      <p id="menuMeta">正在連接雲端菜單資料庫...</p>
+      <p id="menuMeta">載入中...</p>
     </div>
     <div id="syncBadge" class="sync-badge offline">未連線</div>
   </div>
@@ -199,11 +212,10 @@
   </div>
 
   <div class="panel uploadPanel">
-    <h2>📋 雲端菜單辨識同步</h2>
-    <p class="hint">您上傳的菜單將會「即時同步」給所有打開此網頁的人。系統會呼叫 AI 辨識自動讀出品項與多種容量價格。</p>
+    <h2>📋 新增店家菜單</h2>
+    <p class="hint">上傳的新菜單會被加入「店家清單」中，並同步菜單照片，方便大家日後直接切換選購。</p>
     <div class="uploadRow">
-      <button class="btn btn-primary" id="uploadBtn">上傳新菜單照片</button>
-      <button class="btn btn-outline" id="resetMenuBtn">還原範例菜單 (所有人)</button>
+      <button class="btn btn-primary" id="uploadBtn">上傳菜單並新增店家</button>
       <input type="file" id="fileInput" accept="image/*">
     </div>
     <div class="status" id="uploadStatus"></div>
@@ -211,6 +223,14 @@
 
   <div class="layout">
     <div class="menuCol">
+      <div class="store-header">
+        <h2>🏬 選擇要點餐的店家：</h2>
+        <select id="storeSelector" class="store-select">
+          <option value="default">丹丹漢堡 (預設)</option>
+        </select>
+        <img id="storeImage" class="store-image" src="" alt="店家菜單照片">
+      </div>
+
       <div class="tabs" id="tabs"></div>
       <div class="catNote" id="catNote"></div>
       <div class="items" id="items"></div>
@@ -266,7 +286,6 @@ import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, a
 
 /* ========================================================================
    🔴 如果您要部署到 GitHub Pages，請將下方的設定替換為您自己的 Firebase Config！
-   (去 firebase.google.com 免費建立專案 -> Project Settings -> 取得 Config)
    ======================================================================== */
 let firebaseConfig = {
   apiKey: "AIzaSyDUPG7M2twmazWyOWkWlefW05CU-eQhIIM",
@@ -277,7 +296,6 @@ let firebaseConfig = {
   appId: "1:892773573382:web:d5a057754a117ddd567487"
 };
 
-// 若在協作平台上，系統會自動注入此變數，覆蓋上方的預設值
 if (typeof __firebase_config !== 'undefined') {
   firebaseConfig = JSON.parse(__firebase_config);
 }
@@ -285,32 +303,91 @@ const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'food-order-app';
 
 let db, auth, currentUser;
 
+// 防呆機制 (連線逾時保護)
+const withTimeout = (promise, ms = 8000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Firebase 連線逾時！請檢查資料庫狀態或網路。")), ms))
+  ]);
+};
+
 /* ---------------- Default menu ---------------- */
 const DEFAULT_MENU = {
   storeName: "丹丹漢堡",
   categories: [
     { key:"set", name:"定食餐", color:"#2E3B25",
-      note:"每份附中杯飲料一杯。可加購薯條（早安餐不適用）。",
+      note:"每份附中杯飲料一杯。可加購薯條（早安餐不適用）：地瓜薯條 +$26 或 義式紅醬波浪薯 +$39，二選一。",
       items:[
         {name:"赤肉麵線焿+脆皮炸雞", price:109},
         {name:"香檸吉司豬排堡+蘑菇雞肉可樂餅(2入)", price:119, tag:"NEW"},
+        {name:"無骨雞塊(5入)+黃金鮮酥雞", price:109, tag:"NEW"},
+        {name:"五穀瘦肉粥+脆皮炸雞", price:109},
         {name:"鮮脆雞腿堡+玉米濃湯", price:104},
-        {name:"2塊脆皮炸雞(腿、塊任選)", price:113}
+        {name:"鮮酥雞肉焿+烤醬雞堡", price:99, tag:"微辣"},
+        {name:"烤醬雞堡+脆皮炸雞", price:112, tag:"微辣"},
+        {name:"香檸吉司豬排堡+脆皮炸雞", price:119},
+        {name:"赤肉麵線焿+鮮脆雞腿堡", price:119},
+        {name:"2塊脆皮炸雞(腿、塊任選)", price:113},
+        {name:"赤肉麵線焿+經典排骨酥", price:89, tag:"NEW"},
+        {name:"五穀瘦肉粥+蘑菇雞肉可樂餅(2入)", price:99, tag:"NEW"},
+      ]
+    },
+    { key:"combo4", name:"呷飽餐 4件組", color:"#5A2E2A",
+      note:"每份附中杯飲料一杯，加購薯條規則同定食餐。",
+      items:[
+        {name:"烤醬雞堡+玉米濃湯+無骨雞塊(5入)", price:129, tag:"微辣"},
+        {name:"經典排骨酥+鮮酥雞肉焿+脆皮炸雞", price:139},
+        {name:"黃金鮮酥雞+排骨酥肉焿+香酥米糕", price:129},
+        {name:"經典排骨酥+排骨酥肉焿+香檸吉司豬排堡", price:139},
+      ]
+    },
+    { key:"morning", name:"早安餐", color:"#2F6F6B",
+      note:"每週二至週五、早上10:30前供應，附中杯飲料，不適用薯條加購活動。",
+      items:[
+        {name:"烤醬雞堡", price:65, tag:"NEW・微辣"},
+        {name:"香檸吉司豬排堡", price:75, tag:"NEW"},
+        {name:"五穀瘦肉粥", price:53},
+        {name:"赤肉麵線焿", price:53},
+        {name:"火腿蛋三明治", price:46, note:"單點 $30"},
+        {name:"肉鬆蛋三明治", price:46, note:"單點 $30"},
       ]
     },
     { key:"ala", name:"美味丹點", color:"#4B2354",
-      note:"單點品項，不含飲料。",
+      note:"單點品項，不含飲料。額外索取醬包需另收費。",
       items:[
         {name:"鮮脆雞腿堡", price:69},
+        {name:"香檸吉司豬排堡", price:59},
+        {name:"烤醬雞堡", price:47, tag:"微辣"},
+        {name:"玉米濃湯", price:29},
+        {name:"麻辣麵線焿", price:48, note:"附辣椒醬"},
+        {name:"赤肉麵線焿", price:42},
+        {name:"五穀瘦肉粥", price:42},
+        {name:"排骨酥肉焿", price:42, tag:"NEW"},
+        {name:"鮮酥雞肉焿", price:42},
+        {name:"脆皮雞腿", price:51, note:"附胡椒粉"},
+        {name:"脆皮雞塊", price:51, note:"附糖醋醬"},
         {name:"無骨雞塊", note:"附糖醋醬", variants:[{label:"5入",price:49},{label:"9入",price:78}]},
+        {name:"麻糬棒(5入/份)", price:29, note:"附黑糖蜜"},
+        {name:"經典排骨酥", price:45, tag:"NEW", note:"附胡椒粉"},
+        {name:"黃金鮮酥雞", price:49, note:"附普羅旺斯香草"},
+        {name:"蘑菇雞肉可樂餅(2入/份)", price:49, tag:"NEW", note:"附義式紅醬"},
+        {name:"義式紅醬波浪薯", price:44, note:"附甘梅粉"},
         {name:"地瓜薯條", price:31, note:"附醬油膏"},
+        {name:"香酥米糕", price:35},
+        {name:"超長熱狗", price:29, note:"附番茄醬"},
       ]
     },
     { key:"drink", name:"飲品", color:"#C8940A",
       note:"限高屏地區供應。",
       items:[
         {name:"可樂", variants:[{label:"中",price:29},{label:"大",price:34}]},
+        {name:"汽水", variants:[{label:"中",price:29},{label:"大",price:34}]},
+        {name:"蘋果汁", variants:[{label:"中",price:29},{label:"大",price:34}]},
+        {name:"檸檬風味紅茶", variants:[{label:"中",price:29},{label:"大",price:34}]},
+        {name:"台灣烏龍(無糖)", tag:"NEW", variants:[{label:"中",price:29},{label:"大",price:34}]},
         {name:"紅茶牛奶", variants:[{label:"小",price:29},{label:"中",price:34},{label:"大",price:39}]},
+        {name:"熱桂花烏龍", price:29, tag:"NEW"},
+        {name:"熱美式咖啡", price:29, tag:"NEW"},
       ]
     }
   ]
@@ -322,7 +399,9 @@ let activeCat = null;
 let openItemId = null;
 let cart = [];
 let itemConfigState = {};
-let globalOrders = []; // Synced from Firestore
+let globalOrders = []; 
+let globalMenus = []; // 儲存所有店家資料
+let activeMenuId = 'default'; // 目前選擇的店家 ID
 
 const DRINK_OPTIONS = [
   { id:"cola",    label:"可樂",   sizes:[{id:"m",label:"中",extra:0},{id:"l",label:"大",extra:5}] },
@@ -485,7 +564,6 @@ function renderItemConfig(item, cfg){
   `;
   box.innerHTML = html;
 
-  // Bind events
   if(item.variants){
     box.querySelectorAll('[data-role="variant"] .cfg-opt').forEach(elm=>{ elm.onclick = ()=>{ cfg.variantIdx = parseInt(elm.dataset.i); renderItemConfig(item,cfg); }; });
   }
@@ -580,25 +658,51 @@ async function submitOrderDb(){
   if(!currentUser) { showToast("尚未連線到雲端資料庫，請檢查設定！"); return; }
 
   const total = cart.reduce((s,l)=>s+l.lineTotal,0);
-  const order = { name, time: new Date().toISOString(), lines: cart.map(l=>({...l})), total };
+  // 新增 userId 標記這筆訂單是誰送出的
+  const order = { name, time: new Date().toISOString(), lines: cart.map(l=>({...l})), total, userId: currentUser.uid };
   
   const btn = document.getElementById("submitBtn");
   btn.disabled = true; btn.textContent = "送出中…";
   
   try {
     const ordersColl = collection(db, 'artifacts', APP_ID, 'orders');
-    await addDoc(ordersColl, order);
+    await withTimeout(addDoc(ordersColl, order));
     await saveUserSettings("lastName", name);
     
     showReceipt(order);
     cart = []; renderCart();
   } catch(e) {
     console.error(e);
-    showToast("送出失敗，檢查是否設定了 Firebase Config");
+    showToast(e.message || "送出失敗，請檢查網路連線");
   } finally {
     btn.disabled = false; btn.textContent = "送出訂單 (同步至雲端)";
   }
 }
+
+// 供刪除按鈕呼叫的全域函數
+window.handleCancelOrder = async (orderId) => {
+  const ok = await showConfirm("確定要取消這筆訂單嗎？");
+  if(!ok) return;
+  try {
+    await withTimeout(deleteDoc(doc(db, 'artifacts', APP_ID, 'orders', orderId)));
+    showToast("已取消訂單");
+  } catch(e) { showToast("取消失敗：" + e.message); }
+};
+
+window.handleEditOrder = async (orderId) => {
+  const targetOrder = globalOrders.find(o => o._id === orderId);
+  if(!targetOrder) return;
+  const ok = await showConfirm("要將這筆訂單退回購物車修改嗎？(原訂單將被取消)");
+  if(!ok) return;
+  try {
+    cart = [...targetOrder.lines];
+    document.getElementById("nameInput").value = targetOrder.name;
+    renderCart();
+    await withTimeout(deleteDoc(doc(db, 'artifacts', APP_ID, 'orders', orderId)));
+    showToast("已退回購物車，請修改後重新送出");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch(e) { showToast("編輯失敗：" + e.message); }
+};
 
 function renderAllOrders(){
   const list = globalOrders;
@@ -615,9 +719,22 @@ function renderAllOrders(){
   wrap.innerHTML = list.map(o=>{
     const t = new Date(o.time);
     const timeStr = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    // 檢查是否為本人送出的訂單
+    const isMine = currentUser && (o.userId === currentUser.uid);
+
+    const actionHtml = isMine ? `
+      <div class="my-actions">
+        <button class="btn btn-outline btn-small" onclick="handleEditOrder('${o._id}')">✏️ 編輯</button>
+        <button class="btn btn-outline btn-small" style="color:#B0322C; border-color:#EADFD0;" onclick="handleCancelOrder('${o._id}')">🗑️ 取消訂單</button>
+      </div>
+    ` : "";
+
     return `
-      <div class="personCard">
-        <div class="p-head"><span class="p-name">${escapeHtml(o.name)}</span><span class="p-time">${timeStr}</span></div>
+      <div class="personCard ${isMine ? 'my-card' : ''}">
+        <div class="p-head">
+          <span class="p-name">${escapeHtml(o.name)} ${isMine ? '<span class="my-badge">你的訂單</span>' : ''}</span>
+          <span class="p-time">${timeStr}</span>
+        </div>
         <ul>${o.lines.map(l=>{
             const subParts = [];
             if(l.includes) subParts.push(`內含：${l.includes.join("、")}`);
@@ -626,6 +743,7 @@ function renderAllOrders(){
             return `<li><div class="li-top"><span>${l.name} ×${l.qty}</span><span class="mono">${money(l.lineTotal)}</span></div>${subParts.length?`<div class="li-sub">${subParts.join(' ・ ')}</div>`:""}</li>`;
           }).join("")}</ul>
         <div style="text-align:right;margin-top:8px;"><span class="p-total">小計 ${money(o.total)}</span></div>
+        ${actionHtml}
       </div>
     `;
   }).join("");
@@ -653,29 +771,71 @@ function renderAllOrders(){
   document.getElementById("summaryBox").style.display = "block";
 }
 
+function updateActiveMenuDisplay() {
+  const imgEl = document.getElementById('storeImage');
+  if (activeMenuId === 'default' || !activeMenuId) {
+    MENU = normalizeMenu(DEFAULT_MENU);
+    imgEl.style.display = 'none';
+  } else {
+    const currentMenu = globalMenus.find(m => m._id === activeMenuId);
+    if (currentMenu) {
+      MENU = normalizeMenu(JSON.parse(currentMenu.menuJson));
+      if (currentMenu.imageBase64) {
+        imgEl.src = currentMenu.imageBase64;
+        imgEl.style.display = 'block';
+      } else {
+        imgEl.style.display = 'none';
+      }
+    } else {
+      MENU = normalizeMenu(DEFAULT_MENU);
+      imgEl.style.display = 'none';
+    }
+  }
+  document.getElementById("menuMeta").textContent = `目前店家：${MENU.storeName}（大家共用）`;
+  activeCat = MENU.categories[0]?.key;
+  itemConfigState = {}; openItemId = null;
+  renderTabs(); renderItems();
+}
+
+function renderStoreSelector() {
+  const sel = document.getElementById("storeSelector");
+  const optionsHtml = `<option value="default">🍔 丹丹漢堡 (預設)</option>` + 
+    globalMenus.map(m => `<option value="${m._id}">🏪 ${escapeHtml(m.name)}</option>`).join("");
+  
+  sel.innerHTML = optionsHtml;
+  sel.value = activeMenuId; // 恢復目前選擇的值
+}
+
 function setupFirebaseListeners() {
   if (!currentUser) return;
   const badge = document.getElementById("syncBadge");
   badge.className = "sync-badge online";
   badge.textContent = "即時同步中";
 
-  // 1. Listen to Menu changes
-  const menuDoc = doc(db, 'artifacts', APP_ID, 'public', 'shared_menu');
-  onSnapshot(menuDoc, (snap) => {
-    if (snap.exists() && snap.data().menuJson) {
-      const parsed = JSON.parse(snap.data().menuJson);
-      MENU = normalizeMenu(parsed);
-      document.getElementById("menuMeta").textContent = `目前菜單來源：${MENU.storeName}（大家共用的即時菜單）`;
-    } else {
-      MENU = normalizeMenu(DEFAULT_MENU);
-      document.getElementById("menuMeta").textContent = "範例菜單：丹丹漢堡 (雲端尚未有資料)";
-    }
-    if(!activeCat || !MENU.categories.find(c=>c.key===activeCat)) activeCat = MENU.categories[0].key;
-    itemConfigState = {}; openItemId = null;
-    renderTabs(); renderItems();
-  }, (err) => console.error("Menu sync error:", err));
+  // 1. Listen to all Store Menus
+  const menusColl = collection(db, 'artifacts', APP_ID, 'menus');
+  onSnapshot(menusColl, (snap) => {
+    const list = [];
+    snap.forEach(d => list.push({ _id: d.id, ...d.data() }));
+    list.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    globalMenus = list;
+    renderStoreSelector();
+    updateActiveMenuDisplay();
+  }, (err) => console.error("Menus sync error:", err));
 
-  // 2. Listen to Orders changes
+  // 2. Listen to Session (Active Menu)
+  const sessionDoc = doc(db, 'artifacts', APP_ID, 'public', 'session');
+  onSnapshot(sessionDoc, (snap) => {
+    if (snap.exists() && snap.data().activeMenuId) {
+      activeMenuId = snap.data().activeMenuId;
+    } else {
+      activeMenuId = 'default';
+    }
+    renderStoreSelector();
+    updateActiveMenuDisplay();
+  }, (err) => console.error("Session sync error:", err));
+
+  // 3. Listen to Orders
   const ordersColl = collection(db, 'artifacts', APP_ID, 'orders');
   onSnapshot(ordersColl, (snap) => {
     const list = [];
@@ -705,31 +865,27 @@ async function loadUserSettings() {
 
 async function saveUserSettings(key, val) {
   if (!currentUser) return;
-  try {
-    const userDoc = doc(db, 'artifacts', APP_ID, 'users', currentUser.uid);
-    await setDoc(userDoc, { [key]: val }, { merge: true });
-  } catch(e) { console.error("Settings save error:", e); }
+  const userDoc = doc(db, 'artifacts', APP_ID, 'users', currentUser.uid);
+  await withTimeout(setDoc(userDoc, { [key]: val }, { merge: true }));
 }
 
-async function updateSharedMenuDb(rawMenu) {
+async function clearAllOrdersDb(skipConfirm = false) {
   if (!currentUser) return;
-  const menuDoc = doc(db, 'artifacts', APP_ID, 'public', 'shared_menu');
-  await setDoc(menuDoc, { menuJson: JSON.stringify(rawMenu), updatedAt: new Date().toISOString() });
-}
-
-async function clearAllOrdersDb() {
-  if (!currentUser) return;
-  const ok = await showConfirm("確定要清空雲端上「所有人」的訂單嗎？此動作無法復原。");
-  if(!ok) return;
-  
+  if(!skipConfirm){
+    const ok = await showConfirm("確定要清空雲端上「所有人」的訂單嗎？此動作無法復原。");
+    if(!ok) return;
+  }
   try {
     const ordersColl = collection(db, 'artifacts', APP_ID, 'orders');
-    const snap = await getDocs(ordersColl);
+    const snap = await withTimeout(getDocs(ordersColl));
     const deletePromises = [];
     snap.forEach(d => deletePromises.push(deleteDoc(doc(db, 'artifacts', APP_ID, 'orders', d.id))));
-    await Promise.all(deletePromises);
-    showToast("已清空所有雲端訂單");
-  } catch(e) { showToast("清空失敗，請檢查網路連線"); console.error(e); }
+    await withTimeout(Promise.all(deletePromises));
+    if(!skipConfirm) showToast("已清空所有雲端訂單");
+  } catch(e) { 
+    if(!skipConfirm) showToast(e.message || "清空失敗，請檢查網路連線"); 
+    console.error(e); 
+  }
 }
 
 function showReceipt(order){
@@ -750,7 +906,7 @@ function showToast(msg){
   const el = document.getElementById("toast");
   el.textContent = msg; el.classList.add("show");
   if(toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=> el.classList.remove("show"), 2800);
+  toastTimer = setTimeout(()=> el.classList.remove("show"), 3500);
 }
 
 function showConfirm(msg){
@@ -766,6 +922,30 @@ function showConfirm(msg){
 }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// 縮小圖片尺寸，以符合 Firebase Firestore 單一文件 1MB 的限制
+async function compressImageForDB(base64DataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64DataUrl;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const MAX_WIDTH = 1200; // 安全的寬度，保證畫質又不會太大
+      let width = img.width;
+      let height = img.height;
+      if (width > MAX_WIDTH) {
+        height = Math.round((height * MAX_WIDTH) / width);
+        width = MAX_WIDTH;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      // 輸出 JPEG，品質 0.6，通常能在 100~150KB 左右
+      resolve(canvas.toDataURL("image/jpeg", 0.6));
+    };
+  });
+}
+
 async function extractMenuFromImage(file){
   const statusEl = document.getElementById("uploadStatus");
   const apiKey = document.getElementById("apiKeyInput").value.trim();
@@ -777,43 +957,75 @@ async function extractMenuFromImage(file){
     statusEl.className = "status err"; statusEl.textContent = "資料庫未連線，無法同步菜單。"; return;
   }
 
-  statusEl.className = "status"; statusEl.textContent = "正在讀取圖片…";
-  const base64 = await new Promise((resolve,reject)=>{
-    const r = new FileReader(); r.onload = ()=> resolve(r.result.split(",")[1]); r.onerror = reject; r.readAsDataURL(file);
-  });
+  statusEl.className = "status"; statusEl.textContent = "正在讀取與壓縮圖片…";
   
-  statusEl.textContent = "正在調用 Gemini AI 辨識菜單內容… (大約需要 5~10 秒)";
-  const systemPrompt = `你是菜單辨識引擎。只能輸出「純JSON」，不能有任何說明文字。
-JSON格式必須嚴格依照此結構：{"storeName":"店名","categories":[{"name":"分類名稱","note":"此分類規則(20字以內)","items":[{"name":"品項名稱","price":數字,"tag":"NEW等標籤","variants":[{"label":"尺寸(如:小/大/瓶裝)","price":數字}]}]}]}
-重要規則：
-- 套餐如果由多個品項組成，name請用「品項A+品項B」呈現。
-- 同品項若有多種容量(小中大)，請將 items 下的 price 設為 0，並將尺寸與價格放入 variants 陣列。
-- price 必須是純數字。只輸出 JSON 本身。`;
-
   try {
+    // 取得原始圖片的 Base64
+    const originalDataUrl = await new Promise((resolve,reject)=>{
+      const r = new FileReader(); r.onload = ()=> resolve(r.result); r.onerror = reject; r.readAsDataURL(file);
+    });
+    
+    // 壓縮圖片供存入資料庫使用
+    const compressedDataUrl = await compressImageForDB(originalDataUrl);
+    
+    // 準備傳給 Gemini 的格式 (移除 data:image/jpeg;base64, 前綴)
+    const base64ForGemini = originalDataUrl.split(",")[1];
+    const mimeTypeForGemini = file.type || "image/jpeg";
+
+    statusEl.textContent = "正在調用 Gemini AI 辨識菜單內容… (大約需要 5~10 秒)";
+    const systemPrompt = `你是菜單辨識引擎。只能輸出「純JSON」，不能有任何說明文字。
+JSON格式必須嚴格依照此結構：{"storeName":"店名","categories":[{"name":"分類名稱","note":"此分類規則(20字以內)","items":[{"name":"品項名稱","price":數字,"tag":"NEW等標籤","variants":[{"label":"尺寸或規格(如:小/中/大/瓶裝/5入/9入)","price":數字}]}]}]}
+重要規則：
+- 如果圖片中有店名，請務必填入 storeName。
+- 若同品項有不同容量或規格(例如:小杯/大杯、5塊/9塊)，必須將價格完整列入 variants 陣列中，此時外層的 price 請設為 0。
+- price 必須是純數字。只輸出 JSON 本身，不要加 \`\`\`json 標籤。`;
+
     let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [ { text: systemPrompt }, { inlineData: { mimeType: file.type || "image/jpeg", data: base64 } } ] }],
+        contents: [{ parts: [ { text: systemPrompt }, { inlineData: { mimeType: mimeTypeForGemini, data: base64ForGemini } } ] }],
         generationConfig: { responseMimeType: "application/json" }
       })
     });
-    if (!response.ok) throw new Error((await response.json()).error?.message || "API request failed");
+    
+    if (!response.ok) {
+       const errJson = await response.json();
+       throw new Error(`API 錯誤: ${errJson.error?.message || "未知錯誤"}`);
+    }
 
     const data = await response.json();
     let text = data.candidates[0].content.parts[0].text.trim().replace(/^```json/i,"").replace(/^```/,"").replace(/```$/,"").trim();
-    const parsed = JSON.parse(text);
+    
+    let parsed;
+    try { parsed = JSON.parse(text); } 
+    catch(e) { throw new Error("AI 回傳的格式無法解析，請換張更清晰的照片"); }
+
     if(!parsed.categories || !parsed.categories.length) throw new Error("解析結果為空");
 
-    // Upload to Firebase -> Listener will automatically render it for everyone!
-    await updateSharedMenuDb(parsed);
+    statusEl.textContent = "辨識成功！正在建立新店家並同步給大家…";
+
+    // 1. 將新菜單(含壓縮圖片)寫入 menus 集合
+    const menusColl = collection(db, 'artifacts', APP_ID, 'menus');
+    const newMenuRef = await withTimeout(addDoc(menusColl, {
+      name: parsed.storeName || "未命名店家",
+      menuJson: JSON.stringify(parsed),
+      imageBase64: compressedDataUrl,
+      createdAt: new Date().toISOString()
+    }));
+
+    // 2. 切換 Session 狀態至這家新店
+    const sessionDoc = doc(db, 'artifacts', APP_ID, 'public', 'session');
+    await withTimeout(setDoc(sessionDoc, { activeMenuId: newMenuRef.id }, { merge: true }));
+    
+    // 3. 換店時，自動清空大家原本的舊訂單(不跳確認)
+    await clearAllOrdersDb(true);
 
     statusEl.className = "status ok";
-    statusEl.textContent = "辨識完成，並已同步給所有人！請核對每個品項的價格是否正確。";
+    statusEl.textContent = "新增店家完成，並已自動切換且同步照片給所有人！";
   } catch(e) {
     console.error(e);
     statusEl.className = "status err";
-    statusEl.textContent = `辨識失敗 (${e.message})。請檢查 API Key 或照片清晰度。`;
+    statusEl.textContent = `失敗 (${e.message})。`;
   }
 }
 
@@ -823,15 +1035,24 @@ async function init(){
     const isOpen = document.getElementById('apiPanelBody').classList.toggle('open');
     document.getElementById('apiToggleIcon').textContent = isOpen ? '▲ 收合' : '▼ 展開';
   };
+  
   document.getElementById('saveApiKeyBtn').onclick = async () => {
     const val = document.getElementById('apiKeyInput').value.trim();
     if(val){
-      await saveUserSettings("apiKey", val);
-      document.getElementById('apiStatus').textContent = "(已儲存至私人雲端)";
-      document.getElementById('apiStatus').style.color = "#2E7D4F";
-      showToast("API Key 已安全儲存");
-      document.getElementById('apiPanelBody').classList.remove('open');
-      document.getElementById('apiToggleIcon').textContent = '▼ 展開';
+      const btn = document.getElementById('saveApiKeyBtn');
+      btn.textContent = "儲存中...";
+      try {
+        await saveUserSettings("apiKey", val);
+        document.getElementById('apiStatus').textContent = "(已儲存至私人雲端)";
+        document.getElementById('apiStatus').style.color = "#2E7D4F";
+        showToast("API Key 已安全儲存");
+        document.getElementById('apiPanelBody').classList.remove('open');
+        document.getElementById('apiToggleIcon').textContent = '▼ 展開';
+      } catch (e) {
+        showToast(e.message || "儲存失敗");
+      } finally {
+        btn.textContent = "儲存";
+      }
     }
   };
   
@@ -839,22 +1060,39 @@ async function init(){
   document.getElementById("fileInput").onchange = (e)=>{
     const f = e.target.files[0]; if(f) extractMenuFromImage(f); e.target.value = "";
   };
-  document.getElementById("resetMenuBtn").onclick = async ()=>{
-    const ok = await showConfirm("確定要把「所有人」的菜單還原成預設丹丹漢堡嗎？");
-    if(!ok) return;
-    await updateSharedMenuDb(DEFAULT_MENU);
-    document.getElementById("uploadStatus").textContent = "";
+  
+  // 監聽下拉選單切換店家
+  document.getElementById("storeSelector").onchange = async (e) => {
+    const newId = e.target.value;
+    if (newId === activeMenuId) return;
+    
+    const ok = await showConfirm("切換店家會自動「清空大家目前的訂單」，確定要切換嗎？");
+    if (!ok) {
+      e.target.value = activeMenuId; // 恢復選項
+      return;
+    }
+    
+    try {
+      // 清空舊訂單，並更新 Session
+      await clearAllOrdersDb(true);
+      const sessionDoc = doc(db, 'artifacts', APP_ID, 'public', 'session');
+      await withTimeout(setDoc(sessionDoc, { activeMenuId: newId }, { merge: true }));
+      showToast("已切換店家！");
+    } catch(err) {
+      showToast("切換失敗，請檢查網路連線");
+      e.target.value = activeMenuId;
+    }
   };
+
   document.getElementById("submitBtn").onclick = submitOrderDb;
   document.getElementById("clearOrdersBtn").onclick = clearAllOrdersDb;
 
-  // Render initial empty state
   renderCart();
   
   // Initialize Firebase Connection
   try {
     if(firebaseConfig.apiKey === "請填入您的_apiKey" && typeof __firebase_config === 'undefined') {
-      showToast("⚠️ Firebase 尚未設定，無法連線。請修改 index.html 裡的 firebaseConfig。");
+      showToast("⚠️ Firebase 尚未設定，無法連線。");
       throw new Error("Missing Firebase Config");
     }
 
@@ -862,7 +1100,6 @@ async function init(){
     auth = getAuth(app);
     db = getFirestore(app);
     
-    // Auth Flow
     if (typeof __initial_auth_token !== 'undefined') {
       const cred = await signInWithCustomToken(auth, __initial_auth_token);
       currentUser = cred.user;
@@ -871,13 +1108,11 @@ async function init(){
       currentUser = cred.user;
     }
 
-    // Start Listeners
     setupFirebaseListeners();
     await loadUserSettings();
 
   } catch(e) {
     console.error("Firebase init failed:", e);
-    // Offline fallback for rendering at least something
     MENU = normalizeMenu(DEFAULT_MENU);
     activeCat = MENU.categories[0].key;
     renderTabs(); renderItems();
