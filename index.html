@@ -67,7 +67,7 @@
   .store-select { width: 100%; max-width: 320px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--line); font-size: 15px; font-weight: 700; font-family: inherit; background: #fff; cursor: pointer; outline: none; }
   .store-select:focus { border-color: var(--pink); }
   .store-image { width: 100%; height: auto; max-height: 250px; object-fit: contain; border-radius: 14px; margin-top: 14px; border: 1px solid var(--line); display: none; box-shadow: var(--shadow); }
-  
+
   .layout { display: flex; gap: 18px; align-items: flex-start; }
   .menuCol { flex: 1; min-width: 0; }
   .cartCol { width: 340px; flex-shrink: 0; position: sticky; top: 16px; }
@@ -279,17 +279,22 @@
   <footer>此系統已連接雲端資料庫，任何菜單或訂單的更動將即時反映至所有使用者的畫面上。</footer>
 </main>
 
-<script src="./config.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-let firebaseConfig = JSON.parse(window.__firebase_config);
-
-const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'food-order-app';
-
-let db, auth, currentUser;
+/* ========================================================================
+   🔴 如果您要部署到 GitHub Pages，請將下方的設定替換為您自己的 Firebase Config！
+   ======================================================================== */
+let firebaseConfig = {
+  apiKey: "AIzaSyDUPG7M2twmazWyOWkWlefW05CU-eQhIIM",
+  authDomain: "order-b519b.firebaseapp.com",
+  projectId: "order-b519b",
+  storageBucket: "order-b519b.firebasestorage.app",
+  messagingSenderId: "892773573382",
+  appId: "1:892773573382:web:d5a057754a117ddd567487"
+};
 
 if (typeof __firebase_config !== 'undefined') {
   firebaseConfig = JSON.parse(__firebase_config);
