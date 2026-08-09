@@ -1,3 +1,4 @@
+﻿STREAMING_CHUNK:Configuring gitignore rules...
 Operating System Files
 .DS_Store
 .DS_Store?
@@ -6,18 +7,13 @@ Operating System Files
 .Trashes
 ehthumbs.db
 Thumbs.db
-
 IDE & Editor Files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
 Temporary Files & Logs
 *.log
 *.tmp
 node_modules/
-
-# API Keys & Config
-config.js
