@@ -215,19 +215,23 @@
     <h2>📋 新增店家菜單</h2>
     <p class="hint">上傳的新菜單會被加入「店家清單」中，並同步菜單照片，方便大家日後直接切換選購。</p>
     <div class="uploadRow">
-      <button class="btn btn-primary" id="uploadBtn">上傳菜單並新增店家</button>
+      <button class="btn btn-primary" id="uploadBtn">上傳菜單圖片</button>
       <input type="file" id="fileInput" accept="image/*">
+      <label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <input type="checkbox" id="overwriteMenuCheck"> 覆蓋目前選取的店家
+      </label>
     </div>
-    <div class="status" id="uploadStatus"></div>
-  </div>
 
   <div class="layout">
     <div class="menuCol">
       <div class="store-header">
         <h2>🏬 選擇要點餐的店家：</h2>
-        <select id="storeSelector" class="store-select">
-          <option value="default">丹丹漢堡 (預設)</option>
-        </select>
+        <div style="display: flex; gap: 8px;">
+          <select id="storeSelector" class="store-select">
+            <option value="default">丹丹漢堡 (預設)</option>
+          </select>
+          <button class="btn btn-outline" id="deleteStoreBtn" style="display: none; padding: 0 12px; color: #B0322C; border-color: #B0322C;">刪除</button>
+        </div>
         <img id="storeImage" class="store-image" src="" alt="店家菜單照片">
       </div>
 
@@ -282,7 +286,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, updateDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 /* ========================================================================
    🔴 如果您要部署到 GitHub Pages，請將下方的設定替換為您自己的 Firebase Config！
@@ -773,6 +777,8 @@ function renderAllOrders(){
 
 function updateActiveMenuDisplay() {
   const imgEl = document.getElementById('storeImage');
+  const deleteBtn = document.getElementById('deleteStoreBtn');
+  deleteBtn.style.display = (activeMenuId === 'default' || !activeMenuId) ? 'none' : 'block';
   if (activeMenuId === 'default' || !activeMenuId) {
     MENU = normalizeMenu(DEFAULT_MENU);
     imgEl.style.display = 'none';
@@ -872,16 +878,37 @@ async function saveUserSettings(key, val) {
 async function clearAllOrdersDb(skipConfirm = false) {
   if (!currentUser) return;
   if(!skipConfirm){
-    const ok = await showConfirm("確定要清空雲端上「所有人」的訂單嗎？此動作無法復原。");
+    const ok = await showConfirm("確定要清空雲端上「所有人」的訂單嗎？（原訂單將被存檔至歷史紀錄）");
     if(!ok) return;
   }
   try {
     const ordersColl = collection(db, 'artifacts', APP_ID, 'orders');
     const snap = await withTimeout(getDocs(ordersColl));
+    
+    // 【新增】存檔邏輯：如果目前有訂單，將其打包存入 history 集合
+    if (!snap.empty && MENU) {
+      const historyColl = collection(db, 'artifacts', APP_ID, 'history');
+      const orderList = [];
+      let totalAmount = 0;
+      snap.forEach(d => {
+        const data = d.data();
+        orderList.push(data);
+        totalAmount += data.total;
+      });
+      await addDoc(historyColl, {
+        time: new Date().toISOString(),
+        storeName: MENU.storeName,
+        totalAmount: totalAmount,
+        orderCount: orderList.length,
+        orders: orderList
+      });
+    }
+
+    // 原有的刪除邏輯
     const deletePromises = [];
     snap.forEach(d => deletePromises.push(deleteDoc(doc(db, 'artifacts', APP_ID, 'orders', d.id))));
     await withTimeout(Promise.all(deletePromises));
-    if(!skipConfirm) showToast("已清空所有雲端訂單");
+    if(!skipConfirm) showToast("已清空訂單並完成歷史存檔");
   } catch(e) { 
     if(!skipConfirm) showToast(e.message || "清空失敗，請檢查網路連線"); 
     console.error(e); 
@@ -1004,20 +1031,33 @@ JSON格式必須嚴格依照此結構：{"storeName":"店名","categories":[{"na
 
     statusEl.textContent = "辨識成功！正在建立新店家並同步給大家…";
 
-    // 1. 將新菜單(含壓縮圖片)寫入 menus 集合
-    const menusColl = collection(db, 'artifacts', APP_ID, 'menus');
-    const newMenuRef = await withTimeout(addDoc(menusColl, {
-      name: parsed.storeName || "未命名店家",
-      menuJson: JSON.stringify(parsed),
-      imageBase64: compressedDataUrl,
-      createdAt: new Date().toISOString()
-    }));
-
-    // 2. 切換 Session 狀態至這家新店
-    const sessionDoc = doc(db, 'artifacts', APP_ID, 'public', 'session');
-    await withTimeout(setDoc(sessionDoc, { activeMenuId: newMenuRef.id }, { merge: true }));
+    const isOverwrite = document.getElementById("overwriteMenuCheck").checked;
     
-    // 3. 換店時，自動清空大家原本的舊訂單(不跳確認)
+    // 如果有勾選覆蓋，且目前不是預設的丹丹漢堡，則執行更新
+    if (isOverwrite && activeMenuId !== 'default') {
+      const storeDoc = doc(db, 'artifacts', APP_ID, 'menus', activeMenuId);
+      await withTimeout(updateDoc(storeDoc, {
+        name: parsed.storeName || "未命名店家",
+        menuJson: JSON.stringify(parsed),
+        imageBase64: compressedDataUrl,
+        updatedAt: new Date().toISOString()
+      }));
+      statusEl.textContent = "菜單更新成功！已同步給所有人！";
+    } else {
+      // 否則執行原本的新增邏輯
+      const menusColl = collection(db, 'artifacts', APP_ID, 'menus');
+      const newMenuRef = await withTimeout(addDoc(menusColl, {
+        name: parsed.storeName || "未命名店家",
+        menuJson: JSON.stringify(parsed),
+        imageBase64: compressedDataUrl,
+        createdAt: new Date().toISOString()
+      }));
+      const sessionDoc = doc(db, 'artifacts', APP_ID, 'public', 'session');
+      await withTimeout(setDoc(sessionDoc, { activeMenuId: newMenuRef.id }, { merge: true }));
+      statusEl.textContent = "新增店家完成，並已自動切換且同步照片給所有人！";
+    }
+    
+    // 換店時，自動清空大家原本的舊訂單(不跳確認)
     await clearAllOrdersDb(true);
 
     statusEl.className = "status ok";
@@ -1083,7 +1123,22 @@ async function init(){
       e.target.value = activeMenuId;
     }
   };
-
+  document.getElementById("deleteStoreBtn").onclick = async () => {
+    if (activeMenuId === 'default') return;
+    const ok = await showConfirm("確定要刪除這個店家嗎？(所有人將被切換回預設店家)");
+    if (!ok) return;
+    try {
+      // 刪除該店家
+      await withTimeout(deleteDoc(doc(db, 'artifacts', APP_ID, 'menus', activeMenuId)));
+      // 切換回預設店家並清空目前訂單
+      await clearAllOrdersDb(true);
+      const sessionDoc = doc(db, 'artifacts', APP_ID, 'public', 'session');
+      await withTimeout(setDoc(sessionDoc, { activeMenuId: 'default' }, { merge: true }));
+      showToast("店家已刪除");
+    } catch(e) {
+      showToast("刪除失敗：" + e.message);
+    }
+  };
   document.getElementById("submitBtn").onclick = submitOrderDb;
   document.getElementById("clearOrdersBtn").onclick = () => clearAllOrdersDb(false);
 
