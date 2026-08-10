@@ -230,10 +230,9 @@
           <select id="storeSelector" class="store-select">
             <option value="default">丹丹漢堡 (預設)</option>
           </select>
+          <button class="btn btn-outline" id="editStoreNameBtn" style="display: none; padding: 0 12px;">✏️ 改名</button>
           <button class="btn btn-outline" id="deleteStoreBtn" style="display: none; padding: 0 12px; color: #B0322C; border-color: #B0322C;">刪除</button>
         </div>
-        <img id="storeImage" class="store-image" src="" alt="店家菜單照片">
-      </div>
 
       <div class="tabs" id="tabs"></div>
       <div class="catNote" id="catNote"></div>
@@ -406,6 +405,7 @@ let itemConfigState = {};
 let globalOrders = []; 
 let globalMenus = []; // 儲存所有店家資料
 let activeMenuId = 'default'; // 目前選擇的店家 ID
+let editingOrderId = null; // 紀錄目前正在編輯的訂單 ID
 
 const DRINK_OPTIONS = [
   { id:"cola",    label:"可樂",   sizes:[{id:"m",label:"中",extra:0},{id:"l",label:"大",extra:5}] },
@@ -663,23 +663,32 @@ async function submitOrderDb(){
 
   const total = cart.reduce((s,l)=>s+l.lineTotal,0);
   // 新增 userId 標記這筆訂單是誰送出的
-  const order = { name, time: new Date().toISOString(), lines: cart.map(l=>({...l})), total, userId: currentUser.uid };
+  const orderData = { name, time: new Date().toISOString(), lines: cart.map(l=>({...l})), total, userId: currentUser.uid };
   
   const btn = document.getElementById("submitBtn");
-  btn.disabled = true; btn.textContent = "送出中…";
+  btn.disabled = true; btn.textContent = "處理中…";
   
   try {
-    const ordersColl = collection(db, 'artifacts', APP_ID, 'orders');
-    await withTimeout(addDoc(ordersColl, order));
-    await saveUserSettings("lastName", name);
+    if (editingOrderId) {
+      // 如果正在編輯狀態，則更新原訂單 (不用刪除)
+      const orderRef = doc(db, 'artifacts', APP_ID, 'orders', editingOrderId);
+      await withTimeout(updateDoc(orderRef, orderData));
+      editingOrderId = null; // 儲存完畢，解除編輯狀態
+    } else {
+      // 否則為一般新增訂單
+      const ordersColl = collection(db, 'artifacts', APP_ID, 'orders');
+      await withTimeout(addDoc(ordersColl, orderData));
+    }
     
-    showReceipt(order);
+    await saveUserSettings("lastName", name);
+    showReceipt(orderData);
     cart = []; renderCart();
   } catch(e) {
     console.error(e);
-    showToast(e.message || "送出失敗，請檢查網路連線");
+    showToast(e.message || "處理失敗，請檢查網路連線");
   } finally {
-    btn.disabled = false; btn.textContent = "送出訂單 (同步至雲端)";
+    btn.disabled = false; 
+    btn.textContent = "送出訂單 (同步至雲端)";
   }
 }
 
@@ -696,18 +705,22 @@ window.handleCancelOrder = async (orderId) => {
 window.handleEditOrder = async (orderId) => {
   const targetOrder = globalOrders.find(o => o._id === orderId);
   if(!targetOrder) return;
-  const ok = await showConfirm("要將這筆訂單退回購物車修改嗎？(原訂單將被取消)");
+  
+  const ok = await showConfirm("要將這筆訂單載入購物車修改嗎？(修改完成後點擊送出即可直接更新原訂單)");
   if(!ok) return;
-  try {
-    cart = [...targetOrder.lines];
-    document.getElementById("nameInput").value = targetOrder.name;
-    renderCart();
-    await withTimeout(deleteDoc(doc(db, 'artifacts', APP_ID, 'orders', orderId)));
-    showToast("已退回購物車，請修改後重新送出");
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch(e) { showToast("編輯失敗：" + e.message); }
+  
+  // 載入購物車，但不刪除原訂單
+  cart = JSON.parse(JSON.stringify(targetOrder.lines)); 
+  document.getElementById("nameInput").value = targetOrder.name;
+  editingOrderId = orderId; // 標記目前正在編輯的訂單
+  
+  // 改變按鈕文字提示使用者
+  document.getElementById("submitBtn").textContent = "更新訂單 (同步至雲端)";
+  renderCart();
+  showToast("已載入訂單，請修改後點擊「更新訂單」");
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
-
+  
 function renderAllOrders(){
   const list = globalOrders;
   document.getElementById("orderCount").textContent = list.length;
@@ -778,7 +791,28 @@ function renderAllOrders(){
 function updateActiveMenuDisplay() {
   const imgEl = document.getElementById('storeImage');
   const deleteBtn = document.getElementById('deleteStoreBtn');
-  deleteBtn.style.display = (activeMenuId === 'default' || !activeMenuId) ? 'none' : 'block';
+  const editNameBtn = document.getElementById('editStoreNameBtn');
+  const isDefault = (activeMenuId === 'default' || !activeMenuId);
+  deleteBtn.style.display = isDefault ? 'none' : 'block';
+  editNameBtn.style.display = isDefault ? 'none' : 'block';
+  document.getElementById("editStoreNameBtn").onclick = async () => {
+    if (activeMenuId === 'default') return;
+    const currentMenu = globalMenus.find(m => m._id === activeMenuId);
+    if (!currentMenu) return;
+    
+    const newName = prompt("請輸入新的店家名稱：", currentMenu.name);
+    // 如果使用者按了確定且有輸入文字
+    if (newName !== null && newName.trim() !== "") {
+      try {
+        const storeDoc = doc(db, 'artifacts', APP_ID, 'menus', activeMenuId);
+        await withTimeout(updateDoc(storeDoc, { name: newName.trim() }));
+        showToast("店家名稱已更新！");
+      } catch(e) {
+        showToast("更新失敗：" + e.message);
+      }
+    }
+  };
+  
   if (activeMenuId === 'default' || !activeMenuId) {
     MENU = normalizeMenu(DEFAULT_MENU);
     imgEl.style.display = 'none';
