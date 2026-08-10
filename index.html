@@ -704,23 +704,26 @@ window.handleCancelOrder = async (orderId) => {
   } catch(e) { showToast("取消失敗：" + e.message); }
 };
 
-window.handleEditOrder = async (orderId) => {
+window.handleEditLineNote = async (orderId, lineIndex, currentNote) => {
   const targetOrder = globalOrders.find(o => o._id === orderId);
   if(!targetOrder) return;
   
-  const ok = await showConfirm("要將這筆訂單載入購物車修改嗎？(修改完成後點擊送出即可直接更新原訂單)");
-  if(!ok) return;
+  // 跳出視窗讓使用者直接修改文字，暫停畫面操作以防被同步刷新吃掉
+  const newNote = prompt("請輸入新的備註：", currentNote);
   
-  // 載入購物車，但不刪除原訂單
-  cart = JSON.parse(JSON.stringify(targetOrder.lines)); 
-  document.getElementById("nameInput").value = targetOrder.name;
-  editingOrderId = orderId; // 標記目前正在編輯的訂單
-  
-  // 改變按鈕文字提示使用者
-  document.getElementById("submitBtn").textContent = "更新訂單 (同步至雲端)";
-  renderCart();
-  showToast("已載入訂單，請修改後點擊「更新訂單」");
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if(newNote !== null) {
+    try {
+      // 複製一份原本的明細，只替換掉該項目的備註
+      const updatedLines = [...targetOrder.lines];
+      updatedLines[lineIndex].note = newNote.trim();
+      
+      const orderRef = doc(db, 'artifacts', APP_ID, 'orders', orderId);
+      await withTimeout(updateDoc(orderRef, { lines: updatedLines }));
+      showToast("備註已直接更新並同步！");
+    } catch(e) { 
+      showToast("更新失敗：" + e.message); 
+    }
+  }
 };
   
 function renderAllOrders(){
@@ -754,12 +757,16 @@ function renderAllOrders(){
           <span class="p-name">${escapeHtml(o.name)} ${isMine ? '<span class="my-badge">你的訂單</span>' : ''}</span>
           <span class="p-time">${timeStr}</span>
         </div>
-        <ul>${o.lines.map(l=>{
+        <ul>${o.lines.map((l, i)=>{
             const subParts = [];
             if(l.includes) subParts.push(`內含：${l.includes.join("、")}`);
             if(l.addonLines && l.addonLines.length) subParts.push(l.addonLines.join("、"));
             if(l.note) subParts.push(`備註：${l.note}`);
-            return `<li><div class="li-top"><span>${l.name} ×${l.qty}</span><span class="mono">${money(l.lineTotal)}</span></div>${subParts.length?`<div class="li-sub">${subParts.join(' ・ ')}</div>`:""}</li>`;
+            
+            // 新增：如果這是本人的訂單，在數量旁邊加上快速修改備註的按鈕
+            const editBtn = isMine ? `<button class="cl-remove" style="color:#2E7D4F; margin-left:8px;" onclick="handleEditLineNote('${o._id}', ${i}, '${escapeHtml(l.note||"")}')">✏️修改備註</button>` : "";
+            
+            return `<li><div class="li-top"><span>${l.name} ×${l.qty} ${editBtn}</span><span class="mono">${money(l.lineTotal)}</span></div>${subParts.length?`<div class="li-sub">${subParts.join(' ・ ')}</div>`:""}</li>`;
           }).join("")}</ul>
         <div style="text-align:right;margin-top:8px;"><span class="p-total">小計 ${money(o.total)}</span></div>
         ${actionHtml}
@@ -771,9 +778,12 @@ function renderAllOrders(){
   const counts = {};
   list.forEach(o=> o.lines.forEach(l=>{
     (l.components||[]).forEach(c=>{
-      if(!counts[c.name]) counts[c.name] = { total:0, subs:{} };
-      counts[c.name].total += c.qty;
-      if(c.sub) counts[c.name].subs[c.sub] = (counts[c.name].subs[c.sub]||0) + c.qty;
+      // 將訂單的備註附加到品名上，讓廚房對單時能清楚看到，且不同備註會分開計算
+      const displayName = l.note ? `${c.name} (備註: ${l.note})` : c.name;
+      
+      if(!counts[displayName]) counts[displayName] = { total:0, subs:{} };
+      counts[displayName].total += c.qty;
+      if(c.sub) counts[displayName].subs[c.sub] = (counts[displayName].subs[c.sub]||0) + c.qty;
     });
   }));
 
